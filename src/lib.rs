@@ -6,6 +6,7 @@ extern crate napi_derive;
 mod database;
 mod error;
 mod scanner;
+mod structs;
 
 use std::{path::PathBuf, str::FromStr, sync::mpsc::channel, thread::spawn};
 
@@ -14,7 +15,7 @@ use napi::{
   threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode},
   JsFunction,
 };
-use scanner::Song;
+use structs::Song;
 
 use crate::scanner::start_scan;
 
@@ -31,7 +32,7 @@ pub fn scan_files(
   let dir = PathBuf::from_str(dir.as_str())?;
   let database_dir = PathBuf::from_str(database_dir.as_str())?;
 
-  let tsfn: ThreadsafeFunction<u16, ErrorStrategy::CalleeHandled> =
+  let tsfn: ThreadsafeFunction<Song, ErrorStrategy::CalleeHandled> =
     callback.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
 
   spawn(move || {

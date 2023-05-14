@@ -25,8 +25,6 @@ pub fn files_not_in_db(
   statement.next_back();
   statement.next_back();
 
-  println!("{}", statement.as_str());
-
   let mut result: HashSet<(PathBuf, u64)> = HashSet::new();
 
   let connection = get_database(database)?;

@@ -7,14 +7,22 @@ export interface Song {
   bitrate?: number
   sampleRate?: number
   duration?: number
-  path: string
-  size: number
-  title: string
-  album: string
-  artists: string
-  year: string
-  genre: string
-  lyrics: string
-  trackNo: string
+  path?: string
+  size?: number
+  title?: string
+  album?: string
+  artists?: string
+  year?: string
+  genre?: string
+  lyrics?: string
+  trackNo?: string
+  highPath?: string
+  lowPath?: string
+  songType?: string
+  playlistId?: number
 }
-export function scanFiles(dir: string, thumbnailDir: string, databaseDir: string, callback: (err: null | Error, result: Song) => void): void
+export interface Playlist {
+  id: number
+  title: string
+}
+export function scanFiles(dir: string, thumbnailDir: string, databaseDir: string, callback: (err: null | Error, result: Song) => void, callback: (err: null | Error, result: Playlist) => void): void

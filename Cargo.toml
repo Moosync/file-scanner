@@ -20,6 +20,7 @@ regex = "1.8.1"
 threadpool = "1.8.1"
 sqlite3 = "0.24.0"
 num_cpus = "1.15.0"
+substring = "1.4.5"
 
 [build-dependencies]
 napi-build = "2.0.1"

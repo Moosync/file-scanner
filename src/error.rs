@@ -1,5 +1,6 @@
 use std::{
   fmt::{self},
+  num::ParseFloatError,
   time::SystemTimeError,
 };
 
@@ -17,6 +18,7 @@ pub enum ScanError {
   DifferentTypesOfPixelsError(DifferentTypesOfPixelsError),
   LoftyError(LoftyError),
   Sqlite3Error(sqlite3::Error),
+  ParseFloatError(ParseFloatError),
 }
 
 impl fmt::Display for ScanError {
@@ -30,6 +32,7 @@ impl fmt::Display for ScanError {
       ScanError::DifferentTypesOfPixelsError(e) => write!(f, "{:?}", e),
       ScanError::LoftyError(e) => write!(f, "{:?}", e),
       ScanError::Sqlite3Error(e) => write!(f, "{:?}", e),
+      ScanError::ParseFloatError(e) => write!(f, "{:?}", e),
     }
   }
 }
@@ -79,6 +82,12 @@ impl From<LoftyError> for ScanError {
 impl From<sqlite3::Error> for ScanError {
   fn from(value: sqlite3::Error) -> Self {
     ScanError::Sqlite3Error(value)
+  }
+}
+
+impl From<ParseFloatError> for ScanError {
+  fn from(value: ParseFloatError) -> Self {
+    ScanError::ParseFloatError(value)
   }
 }
 

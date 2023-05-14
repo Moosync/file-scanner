@@ -222,9 +222,10 @@ fn scan_file(
 
     let picture = metadata.pictures().get(0);
     if picture.is_some() {
-      let (high_path, low_path) = store_picture(thumbnail_dir, picture.unwrap())?;
-      song.high_path = Some(high_path.to_str().unwrap_or_default().to_string());
-      song.low_path = Some(low_path.to_str().unwrap_or_default().to_string());
+      if let Ok((high_path, low_path)) = store_picture(thumbnail_dir, picture.unwrap()) {
+        song.high_path = Some(high_path.to_str().unwrap_or_default().to_string());
+        song.low_path = Some(low_path.to_str().unwrap_or_default().to_string());
+      }
     } else {
       let mut base_path = path.clone();
       base_path.pop();

@@ -18,7 +18,7 @@ pub struct Song {
   pub high_path: Option<String>,
   pub low_path: Option<String>,
   pub song_type: Option<String>,
-  pub playlist_id: Option<u32>,
+  pub playlist_id: Option<String>,
 }
 
 pub struct FileList {
@@ -29,6 +29,6 @@ pub struct FileList {
 #[derive(Default, Debug, Clone)]
 #[napi(object)]
 pub struct Playlist {
-  pub id: u32,
+  pub id: String,
   pub title: String,
 }

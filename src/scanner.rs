@@ -6,13 +6,11 @@ use std::{
   io::{self, BufRead},
   num::NonZeroU32,
   path::{Path, PathBuf},
-  sync::{
-    atomic::{AtomicUsize, Ordering},
-    mpsc::Sender,
-  },
+  sync::mpsc::Sender,
 };
 use substring::Substring;
 use threadpool::ThreadPool;
+use uuid::Uuid;
 
 use image::ColorType;
 
@@ -125,6 +123,33 @@ fn store_picture(
   Ok((high_path, low_path))
 }
 
+fn scan_lrc(mut path: PathBuf) -> Option<String> {
+  path.set_extension("lrc");
+  if path.exists() {
+    lazy_static! {
+      static ref LRC_REGEX: Regex = Regex::new(r"\[\d{2}:\d{2}.\d{2}\]").unwrap();
+    }
+
+    let data = fs::read(path);
+    if data.is_err() {
+      return None;
+    }
+
+    let mut parsed_lyrics = "".to_string();
+    let parsed = String::from_utf8_lossy(&data.unwrap()).to_string();
+    for line in parsed.split("\n") {
+      if LRC_REGEX.is_match(line) {
+        parsed_lyrics.push_str(&LRC_REGEX.replace_all(line, ""));
+        parsed_lyrics.push('\n');
+      }
+    }
+
+    return Some(parsed_lyrics);
+  }
+
+  None
+}
+
 pub fn scan_playlist(path: &PathBuf) -> Result<(Playlist, Vec<Song>), ScanError> {
   let file = File::open(path)?;
   let lines = io::BufReader::new(file).lines();
@@ -182,7 +207,7 @@ pub fn scan_playlist(path: &PathBuf) -> Result<(Playlist, Vec<Song>), ScanError>
 
   Ok((
     Playlist {
-      id: get_id(),
+      id: Uuid::new_v4().to_string(),
       title: playlist_title,
     },
     songs,
@@ -192,7 +217,7 @@ pub fn scan_playlist(path: &PathBuf) -> Result<(Playlist, Vec<Song>), ScanError>
 fn scan_file(
   path: &PathBuf,
   thumbnail_dir: &PathBuf,
-  playlist_id: Option<u32>,
+  playlist_id: &Option<String>,
   size: u64,
   guess: bool,
 ) -> Result<Song, ScanError> {
@@ -215,7 +240,7 @@ fn scan_file(
   song.duration = Some(properties.duration().as_secs() as f64);
   song.path = Some(path.to_string_lossy().to_string());
   song.size = Some(size as u32);
-  song.playlist_id = playlist_id;
+  song.playlist_id = playlist_id.clone();
 
   if tags.is_some() {
     let metadata = tags.unwrap();
@@ -249,17 +274,20 @@ fn scan_file(
       }
     }
 
+    let mut lyrics = metadata
+      .get_string(&lofty::ItemKey::Lyrics)
+      .map(str::to_string);
+
+    if lyrics.is_none() {
+      lyrics = scan_lrc(path.clone());
+    }
+
     song.title = metadata.title().map(|s| s.to_string());
     song.album = metadata.album().map(|s| s.to_string());
     song.artists = metadata.artist().map(|s| s.to_string());
     song.year = metadata.year().map(|s| s.to_string());
     song.genre = metadata.genre().map(|s| s.to_string());
-    song.lyrics = metadata
-      .get_string(&lofty::ItemKey::Lyrics)
-      .map(str::to_string);
-    song.track_no = metadata
-      .get_string(&lofty::ItemKey::TrackNumber)
-      .map(str::to_string);
+    song.lyrics = lyrics;
   }
 
   Ok(song)
@@ -279,13 +307,13 @@ fn scan_in_pool(
   size: u64,
   path: PathBuf,
   thumbnail_dir: PathBuf,
-  playlist_id: Option<u32>,
+  playlist_id: Option<String>,
 ) -> &ThreadPool {
   pool.execute(move || {
-    let mut metadata = scan_file(&path, &thumbnail_dir, playlist_id, size, false);
+    let mut metadata = scan_file(&path, &thumbnail_dir, &playlist_id, size, false);
     if metadata.is_err() {
       println!("Guessing filetype");
-      metadata = scan_file(&path, &thumbnail_dir, playlist_id, size, true);
+      metadata = scan_file(&path, &thumbnail_dir, &playlist_id, size, true);
     }
 
     tx.send(metadata)
@@ -325,7 +353,14 @@ pub fn start_scan(
         path.pop();
         path.push(s.path.unwrap());
 
-        pool = scan_in_pool(&pool, tx, 0, path, thumbnail_dir, Some(playlist_dets.id));
+        pool = scan_in_pool(
+          &pool,
+          tx,
+          0,
+          path,
+          thumbnail_dir,
+          Some(playlist_dets.id.clone()),
+        );
       }
     }
   }
@@ -338,9 +373,4 @@ pub fn start_scan(
 
   drop(tx_song);
   Ok(pool)
-}
-
-fn get_id() -> u32 {
-  static COUNTER: AtomicUsize = AtomicUsize::new(1);
-  COUNTER.fetch_add(1, Ordering::Relaxed) as u32
 }

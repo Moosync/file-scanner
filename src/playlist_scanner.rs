@@ -70,10 +70,10 @@ impl<'a> PlaylistScanner<'a> {
 
           duration = Some(metadata.substring(0, split_index).parse::<f64>()?);
 
-          let non_duration = metadata.substring(split_index, metadata.len());
-          let (artists_str, title_str) = non_duration.split_at(non_duration.find("-").unwrap());
-          artists = Some(artists_str.to_string());
-          title = Some(title_str.to_string());
+          let non_duration = metadata.substring(split_index + 1, metadata.len());
+          let (artists_str, title_str) = non_duration.split_at(non_duration.find("-").unwrap() - 1);
+          artists = Some(artists_str.trim().to_string());
+          title = Some(title_str.replacen("-", "", 1).trim().to_string());
 
           continue;
         }
@@ -89,20 +89,35 @@ impl<'a> PlaylistScanner<'a> {
         }
 
         if !line.starts_with("#") {
-          let path = PathBuf::from_str(line.as_str());
-          if let Ok(path_parsed) = path {
-            if path_parsed.exists() {
+          let mut song = Song::default();
+
+          let s_type = song_type.clone();
+          song.song_type = s_type.unwrap_or("LOCAL".to_string());
+
+          song._id = Uuid::new_v4().to_string();
+
+          if song.song_type == "LOCAL" {
+            let path = PathBuf::from_str(line.as_str());
+            if let Ok(path_parsed) = path {
               let metadata = fs::metadata(&path_parsed)?;
-              let mut song = Song::default();
-              song.path = Some(line);
-              song.artists = self.parse_artists(artists);
-              song.duration = duration;
-              song.title = title;
-              song.song_type = song_type;
+              if !path_parsed.exists() {
+                artists = None;
+                duration = None;
+                title = None;
+                song_type = None;
+                continue;
+              }
+
               song.size = Some(metadata.len() as u32);
-              songs.push(song);
             }
           }
+
+          song.path = Some(line);
+          song.artists = self.parse_artists(artists);
+          song.duration = duration;
+          song.title = title;
+
+          songs.push(song);
 
           artists = None;
           duration = None;
@@ -122,12 +137,16 @@ impl<'a> PlaylistScanner<'a> {
   }
 
   fn scan_song_in_pool(&self, tx_song: Sender<Result<Song, ScanError>>, s: Song) {
-    if s.song_type.is_none() || s.song_type.is_some() && s.song_type.unwrap() == "LOCAL" {
+    if s.song_type == "LOCAL" {
       self.song_scanner.scan_in_pool(
         tx_song,
         s.size.unwrap() as u64,
         PathBuf::from_str(s.path.unwrap().as_str()).unwrap(),
       )
+    } else {
+      tx_song
+        .send(Ok(s))
+        .expect("channel will be there waiting for the pool");
     }
   }
 

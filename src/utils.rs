@@ -182,6 +182,7 @@ pub fn scan_file(
   playlist_id: &Option<String>,
   size: u64,
   guess: bool,
+  artist_split: &str,
 ) -> Result<Song, ScanError> {
   let file: lofty::TaggedFile;
 
@@ -203,6 +204,7 @@ pub fn scan_file(
   song.path = Some(path.to_string_lossy().to_string());
   song.size = Some(size as u32);
   song.playlist_id = playlist_id.clone();
+  song._id = Uuid::new_v4().to_string();
 
   if tags.is_some() {
     let metadata = tags.unwrap();
@@ -247,7 +249,7 @@ pub fn scan_file(
     song.title = metadata.title().map(|s| s.to_string());
     // song.album = metadata.album().map(|s| s.to_string());
     let artists: Option<Vec<Artists>> = metadata.artist().map(|s| {
-      s.split(",")
+      s.split(artist_split)
         .map(|s| Artists {
           artist_id: Uuid::new_v4().to_string(),
           artist_name: s.trim().to_string(),
@@ -270,8 +272,9 @@ pub fn scan_file(
     }
 
     song.year = metadata.year().map(|s| s.to_string());
-    song.genre = metadata.genre().map(|s| s.to_string());
+    song.genre = metadata.genre().map(|s| vec![s.to_string()]);
     song.lyrics = lyrics;
+    song.song_type = "LOCAL".to_string();
   }
 
   Ok(song)

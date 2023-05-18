@@ -23,12 +23,15 @@ use structs::{Playlist, Song};
 use threadpool::ThreadPool;
 
 #[napi(
-  ts_args_type = "dir: string, thumbnailDir: string, databaseDir: string, callback_song: (err: null | Error, result: Song) => void, callback_playlist: (err: null | Error, result: Playlist) => void"
+  ts_args_type = "dir: string, thumbnailDir: string, databaseDir: string, artistSplit: string, threads: number, force: boolean, callback_song: (err: null | Error, result: Song) => void, callback_playlist: (err: null | Error, result: Playlist) => void"
 )]
 pub fn scan_files(
   dir: String,
   thumbnail_dir: String,
   database_dir: String,
+  artist_split: String,
+  threads: i32,
+  force: bool,
   callback_songs: JsFunction,
   callback_playlists: JsFunction,
 ) -> Result<Undefined, napi::Error> {
@@ -46,15 +49,25 @@ pub fn scan_files(
     let (tx_song, rx_song) = channel();
     let (tx_playlist, rx_playlist) = channel();
 
-    let mut pool = ThreadPool::new(num_cpus::get());
+    let cpus = num_cpus::get();
+    let thread_count = if threads <= 0 {
+      cpus
+    } else if threads as usize > cpus {
+      cpus
+    } else {
+      threads as usize
+    };
+
+    let mut pool = ThreadPool::new(thread_count);
     let song_scanner = SongScanner::new(
       dir.clone(),
       &mut pool,
       database_dir.clone(),
       thumbnail_dir.clone(),
+      artist_split,
     );
 
-    let res = song_scanner.start(tx_song.clone());
+    let res = song_scanner.start(tx_song.clone(), force);
     if res.is_err() {
       let cloned = tsfn_songs.clone();
       cloned.call(

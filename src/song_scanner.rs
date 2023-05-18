@@ -14,6 +14,7 @@ pub struct SongScanner<'a> {
   pool: &'a mut ThreadPool,
   database_path: PathBuf,
   thumbnail_dir: PathBuf,
+  artist_split: String,
 }
 
 impl<'a> SongScanner<'a> {
@@ -22,12 +23,14 @@ impl<'a> SongScanner<'a> {
     pool: &'a mut ThreadPool,
     database_path: PathBuf,
     thumbnail_dir: PathBuf,
+    artist_split: String,
   ) -> Self {
     Self {
       dir,
       pool,
       database_path,
       thumbnail_dir,
+      artist_split,
     }
   }
 
@@ -39,11 +42,12 @@ impl<'a> SongScanner<'a> {
 
   pub fn scan_in_pool(&self, tx: Sender<Result<Song, ScanError>>, size: u64, path: PathBuf) {
     let thumbnail_dir = self.thumbnail_dir.clone();
+    let artist_split = self.artist_split.clone();
     self.pool.execute(move || {
-      let mut metadata = scan_file(&path, &thumbnail_dir, &None, size, false);
+      let mut metadata = scan_file(&path, &thumbnail_dir, &None, size, false, &artist_split);
       if metadata.is_err() {
         println!("Guessing filetype");
-        metadata = scan_file(&path, &thumbnail_dir, &None, size, true);
+        metadata = scan_file(&path, &thumbnail_dir, &None, size, true, &artist_split);
       }
 
       tx.send(metadata)
@@ -51,11 +55,20 @@ impl<'a> SongScanner<'a> {
     });
   }
 
-  pub fn start(&self, tx_song: Sender<Result<Song, ScanError>>) -> Result<(), ScanError> {
+  pub fn start(
+    &self,
+    tx_song: Sender<Result<Song, ScanError>>,
+    force: bool,
+  ) -> Result<(), ScanError> {
     self.check_dirs()?;
 
     let file_list = get_files_recursively(self.dir.clone())?;
-    let song_list = files_not_in_db(self.database_path.clone(), file_list.file_list).unwrap();
+
+    let song_list = if !force {
+      files_not_in_db(self.database_path.clone(), file_list.file_list).unwrap()
+    } else {
+      file_list.file_list
+    };
 
     for (file_path, size) in song_list {
       self.scan_in_pool(tx_song.clone(), size, file_path);

@@ -5,8 +5,10 @@ extern crate napi_derive;
 
 mod database;
 mod error;
-mod scanner;
+mod playlist_scanner;
+mod song_scanner;
 mod structs;
+mod utils;
 
 use std::{path::PathBuf, str::FromStr, sync::mpsc::channel, thread::spawn};
 
@@ -15,13 +17,13 @@ use napi::{
   threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode},
   JsFunction,
 };
+use playlist_scanner::PlaylistScanner;
+use song_scanner::SongScanner;
 use structs::{Playlist, Song};
 use threadpool::ThreadPool;
 
-use crate::scanner::start_scan;
-
 #[napi(
-  ts_args_type = "dir: string, thumbnailDir: string, databaseDir: string, callback: (err: null | Error, result: Song) => void, callback: (err: null | Error, result: Playlist) => void"
+  ts_args_type = "dir: string, thumbnailDir: string, databaseDir: string, callback_song: (err: null | Error, result: Song) => void, callback_playlist: (err: null | Error, result: Playlist) => void"
 )]
 pub fn scan_files(
   dir: String,
@@ -44,13 +46,31 @@ pub fn scan_files(
     let (tx_song, rx_song) = channel();
     let (tx_playlist, rx_playlist) = channel();
 
-    let pool = &ThreadPool::new(num_cpus::get());
+    let mut pool = ThreadPool::new(num_cpus::get());
+    let song_scanner = SongScanner::new(
+      dir.clone(),
+      &mut pool,
+      tx_song,
+      database_dir.clone(),
+      thumbnail_dir.clone(),
+    );
 
-    let pool = start_scan(dir, thumbnail_dir, database_dir, tx_song, tx_playlist, pool);
-    if pool.is_err() {
+    let res = song_scanner.start();
+    if res.is_err() {
       let cloned = tsfn_songs.clone();
       cloned.call(
-        Err(pool.err().unwrap().into()),
+        Err(res.err().unwrap().into()),
+        ThreadsafeFunctionCallMode::Blocking,
+      );
+      return;
+    }
+
+    let playlist_scanner = PlaylistScanner::new(dir, tx_playlist, thumbnail_dir, song_scanner);
+    let res1 = playlist_scanner.start();
+    if res1.is_err() {
+      let cloned = tsfn_songs.clone();
+      cloned.call(
+        Err(res.err().unwrap().into()),
         ThreadsafeFunctionCallMode::Blocking,
       );
       return;
@@ -96,15 +116,7 @@ pub fn scan_files(
       }
     }
 
-    // for received in rx_song {
-    //   let cloned = tsfn.clone();
-    //   cloned.call(
-    //     received.map_err(|e| e.into()),
-    //     ThreadsafeFunctionCallMode::NonBlocking,
-    //   );
-    // }
-
-    pool.unwrap().join();
+    pool.join();
   });
 
   Ok(())

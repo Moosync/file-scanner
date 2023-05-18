@@ -19,10 +19,10 @@ export interface Song {
   highPath?: string
   lowPath?: string
   songType?: string
-  playlistId?: number
+  playlistId?: string
 }
 export interface Playlist {
-  id: number
+  id: string
   title: string
 }
-export function scanFiles(dir: string, thumbnailDir: string, databaseDir: string, callback: (err: null | Error, result: Song) => void, callback: (err: null | Error, result: Playlist) => void): void
+export function scanFiles(dir: string, thumbnailDir: string, databaseDir: string, callback_song: (err: null | Error, result: Song) => void, callback_playlist: (err: null | Error, result: Playlist) => void): void

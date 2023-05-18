@@ -2,35 +2,59 @@ use lazy_static::lazy_static;
 use lofty::{read_from_path, Accessor, AudioFile, Picture, Probe, TaggedFileExt};
 use regex::Regex;
 use std::{
-  fs::{self, File},
-  io::{self, BufRead},
+  fs::{self},
   num::NonZeroU32,
   path::{Path, PathBuf},
-  sync::mpsc::Sender,
 };
-use substring::Substring;
-use threadpool::ThreadPool;
-use uuid::Uuid;
 
 use image::ColorType;
 
 use crate::{
-  database::files_not_in_db,
   error::ScanError,
-  structs::{FileList, Playlist, Song},
+  structs::{FileList, Song},
 };
 use fast_image_resize as fr;
 
-fn get_files_recursively(dir: PathBuf) -> Result<FileList, ScanError> {
+pub fn check_directory(dir: PathBuf) -> Result<(), ScanError> {
+  if !dir.is_dir() {
+    fs::create_dir_all(dir)?
+  }
+
+  Ok(())
+}
+
+pub fn get_files_recursively(dir: PathBuf) -> Result<FileList, ScanError> {
   let mut file_list: Vec<(PathBuf, u64)> = vec![];
   let mut playlist_list: Vec<PathBuf> = vec![];
-
-  let dir_entries = fs::read_dir(dir)?;
 
   lazy_static! {
     static ref SONG_RE: Regex = Regex::new("flac|mp3|ogg|m4a|webm|wav|wv|aac|opus").unwrap();
     static ref PLAYLIST_RE: Regex = Regex::new("m3u|m3u8").unwrap();
   }
+
+  if dir.is_file() {
+    let metadata = fs::metadata(&dir)?;
+    let extension = dir
+      .extension()
+      .unwrap_or_default()
+      .to_str()
+      .unwrap_or_default();
+    if !extension.is_empty() {
+      if SONG_RE.is_match(extension) {
+        file_list.push((dir.clone(), metadata.len()));
+      }
+
+      if PLAYLIST_RE.is_match(extension) {
+        playlist_list.push(dir);
+      }
+    }
+    return Ok(FileList {
+      file_list,
+      playlist_list,
+    });
+  }
+
+  let dir_entries = fs::read_dir(dir)?;
 
   for entry in dir_entries {
     let entry = entry?;
@@ -150,71 +174,7 @@ fn scan_lrc(mut path: PathBuf) -> Option<String> {
   None
 }
 
-pub fn scan_playlist(path: &PathBuf) -> Result<(Playlist, Vec<Song>), ScanError> {
-  let file = File::open(path)?;
-  let lines = io::BufReader::new(file).lines();
-
-  let mut songs: Vec<Song> = vec![];
-
-  let mut song_type: Option<String> = None;
-  let mut duration: Option<f64> = None;
-  let mut title: Option<String> = None;
-  let mut artists: Option<String> = None;
-  let mut playlist_title: String = "".to_string();
-  for line_res in lines {
-    if let Ok(line) = line_res {
-      if line.starts_with("#EXTINF:") {
-        let metadata = line.substring(8, line.len());
-        let split_index = metadata.find(",").unwrap_or_default();
-
-        duration = Some(metadata.substring(0, split_index).parse::<f64>()?);
-
-        let non_duration = metadata.substring(split_index, metadata.len());
-        let (artists_str, title_str) = non_duration.split_at(non_duration.find("-").unwrap());
-        artists = Some(artists_str.to_string());
-        title = Some(title_str.to_string());
-
-        continue;
-      }
-
-      if line.starts_with("#MOOSINF:") {
-        song_type = Some(line.substring(9, line.len()).to_string());
-        continue;
-      }
-
-      if line.starts_with("#PLAYLIST:") {
-        playlist_title = line.substring(10, line.len()).to_string();
-        continue;
-      }
-
-      if !line.starts_with("#") {
-        let mut song = Song::default();
-        song.path = Some(line);
-        song.artists = artists;
-        song.duration = duration;
-        song.title = title;
-        song.song_type = song_type;
-
-        songs.push(song);
-
-        artists = None;
-        duration = None;
-        title = None;
-        song_type = None;
-      }
-    }
-  }
-
-  Ok((
-    Playlist {
-      id: Uuid::new_v4().to_string(),
-      title: playlist_title,
-    },
-    songs,
-  ))
-}
-
-fn scan_file(
+pub fn scan_file(
   path: &PathBuf,
   thumbnail_dir: &PathBuf,
   playlist_id: &Option<String>,
@@ -291,86 +251,4 @@ fn scan_file(
   }
 
   Ok(song)
-}
-
-fn check_directory(dir: PathBuf) -> Result<(), ScanError> {
-  if !dir.is_dir() {
-    fs::create_dir_all(dir)?
-  }
-
-  Ok(())
-}
-
-fn scan_in_pool(
-  pool: &ThreadPool,
-  tx: Sender<Result<Song, ScanError>>,
-  size: u64,
-  path: PathBuf,
-  thumbnail_dir: PathBuf,
-  playlist_id: Option<String>,
-) -> &ThreadPool {
-  pool.execute(move || {
-    let mut metadata = scan_file(&path, &thumbnail_dir, &playlist_id, size, false);
-    if metadata.is_err() {
-      println!("Guessing filetype");
-      metadata = scan_file(&path, &thumbnail_dir, &playlist_id, size, true);
-    }
-
-    tx.send(metadata)
-      .expect("channel will be there waiting for the pool");
-  });
-
-  pool
-}
-
-pub fn start_scan(
-  dir: PathBuf,
-  thumbnail_dir: PathBuf,
-  database: PathBuf,
-  tx_song: Sender<Result<Song, ScanError>>,
-  tx_playlist: Sender<Result<Playlist, ScanError>>,
-  mut pool: &ThreadPool,
-) -> Result<&ThreadPool, ScanError> {
-  check_directory(dir.clone())?;
-  check_directory(thumbnail_dir.clone())?;
-
-  let file_list = get_files_recursively(dir)?;
-  let song_list = files_not_in_db(database, file_list.file_list).unwrap();
-
-  for playlist in file_list.playlist_list {
-    let (playlist_dets, songs) = scan_playlist(&playlist)?;
-    let tx_p = tx_playlist.clone();
-    tx_p
-      .send(Ok(playlist_dets.clone()))
-      .expect("channel will be there waiting for the pool");
-
-    for s in songs {
-      let tx = tx_song.clone();
-      if s.song_type.is_none() || s.song_type.is_some() && s.song_type.unwrap() == "LOCAL" {
-        let thumbnail_dir = thumbnail_dir.clone();
-        let mut path = PathBuf::new();
-        path.push(playlist.clone());
-        path.pop();
-        path.push(s.path.unwrap());
-
-        pool = scan_in_pool(
-          &pool,
-          tx,
-          0,
-          path,
-          thumbnail_dir,
-          Some(playlist_dets.id.clone()),
-        );
-      }
-    }
-  }
-
-  for (file_path, size) in song_list {
-    let thumbnail_dir = thumbnail_dir.clone();
-    let tx = tx_song.clone();
-    pool = scan_in_pool(&pool, tx, size, file_path, thumbnail_dir, None);
-  }
-
-  drop(tx_song);
-  Ok(pool)
 }

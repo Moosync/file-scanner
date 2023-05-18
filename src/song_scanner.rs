@@ -12,7 +12,6 @@ use crate::{
 pub struct SongScanner<'a> {
   dir: PathBuf,
   pool: &'a mut ThreadPool,
-  tx_song: Sender<Result<Song, ScanError>>,
   database_path: PathBuf,
   thumbnail_dir: PathBuf,
 }
@@ -21,28 +20,24 @@ impl<'a> SongScanner<'a> {
   pub fn new(
     dir: PathBuf,
     pool: &'a mut ThreadPool,
-    tx_song: Sender<Result<Song, ScanError>>,
     database_path: PathBuf,
     thumbnail_dir: PathBuf,
   ) -> Self {
     Self {
       dir,
       pool,
-      tx_song,
       database_path,
       thumbnail_dir,
     }
   }
 
   fn check_dirs(&self) -> Result<(), ScanError> {
-    check_directory(self.dir.clone())?;
     check_directory(self.thumbnail_dir.clone())?;
 
     Ok(())
   }
 
-  pub fn scan_in_pool(&self, size: u64, path: PathBuf) {
-    let tx = self.tx_song.clone();
+  pub fn scan_in_pool(&self, tx: Sender<Result<Song, ScanError>>, size: u64, path: PathBuf) {
     let thumbnail_dir = self.thumbnail_dir.clone();
     self.pool.execute(move || {
       let mut metadata = scan_file(&path, &thumbnail_dir, &None, size, false);
@@ -56,15 +51,17 @@ impl<'a> SongScanner<'a> {
     });
   }
 
-  pub fn start(&self) -> Result<(), ScanError> {
+  pub fn start(&self, tx_song: Sender<Result<Song, ScanError>>) -> Result<(), ScanError> {
     self.check_dirs()?;
 
     let file_list = get_files_recursively(self.dir.clone())?;
     let song_list = files_not_in_db(self.database_path.clone(), file_list.file_list).unwrap();
 
     for (file_path, size) in song_list {
-      self.scan_in_pool(size, file_path);
+      self.scan_in_pool(tx_song.clone(), size, file_path);
     }
+
+    drop(tx_song);
 
     Ok(())
   }

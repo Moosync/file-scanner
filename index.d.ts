@@ -10,16 +10,26 @@ export interface Song {
   path?: string
   size?: number
   title?: string
-  album?: string
-  artists?: string
+  album?: Album
+  artists: Array<Artists>
   year?: string
   genre?: string
   lyrics?: string
   trackNo?: string
-  highPath?: string
-  lowPath?: string
-  songType?: string
+  song_coverPath_high?: string
+  song_coverPath_low?: string
+  type?: string
   playlistId?: string
+}
+export interface Album {
+  album_id: string
+  album_name: string
+  album_coverPath_high?: string
+  album_coverPath_low?: string
+}
+export interface Artists {
+  artist_id: string
+  artist_name: string
 }
 export interface Playlist {
   id: string

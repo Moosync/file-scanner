@@ -41,7 +41,8 @@
     "start": "yarn build:debug && ts-node main.ts",
     "prepublishOnly": "napi prepublish -t npm",
     "universal": "napi universal",
-    "version": "napi version"
+    "version": "napi version",
+    "install": "npm run build"
   },
   "dependencies": {
     "ts-node": "^10.9.1",

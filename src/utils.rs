@@ -6,16 +6,18 @@ use std::{
   num::NonZeroU32,
   path::{Path, PathBuf},
 };
+use uuid::Uuid;
 
 use image::ColorType;
 
 use crate::{
   error::ScanError,
-  structs::{FileList, Song},
+  structs::{Album, Artists, FileList, Song},
 };
 use fast_image_resize as fr;
 
 pub fn check_directory(dir: PathBuf) -> Result<(), ScanError> {
+  println!("{:?} {:?}", dir, !dir.is_dir());
   if !dir.is_dir() {
     fs::create_dir_all(dir)?
   }
@@ -144,7 +146,7 @@ fn store_picture(
     )?;
   }
 
-  Ok((high_path, low_path))
+  Ok((high_path.canonicalize()?, low_path.canonicalize()?))
 }
 
 fn scan_lrc(mut path: PathBuf) -> Option<String> {
@@ -243,8 +245,30 @@ pub fn scan_file(
     }
 
     song.title = metadata.title().map(|s| s.to_string());
-    song.album = metadata.album().map(|s| s.to_string());
-    song.artists = metadata.artist().map(|s| s.to_string());
+    // song.album = metadata.album().map(|s| s.to_string());
+    let artists: Option<Vec<Artists>> = metadata.artist().map(|s| {
+      s.split(",")
+        .map(|s| Artists {
+          artist_id: Uuid::new_v4().to_string(),
+          artist_name: s.trim().to_string(),
+        })
+        .collect()
+    });
+
+    let album = metadata.album();
+    if album.is_some() {
+      song.album = Some(Album {
+        album_id: Uuid::new_v4().to_string(),
+        album_name: album.unwrap().to_string(),
+        album_cover_path_high: song.high_path.clone(),
+        album_cover_path_low: song.low_path.clone(),
+      })
+    }
+
+    if artists.is_some() {
+      song.artists = artists.unwrap();
+    }
+
     song.year = metadata.year().map(|s| s.to_string());
     song.genre = metadata.genre().map(|s| s.to_string());
     song.lyrics = lyrics;

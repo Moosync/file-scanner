@@ -50,12 +50,11 @@ pub fn scan_files(
     let song_scanner = SongScanner::new(
       dir.clone(),
       &mut pool,
-      tx_song,
       database_dir.clone(),
       thumbnail_dir.clone(),
     );
 
-    let res = song_scanner.start();
+    let res = song_scanner.start(tx_song.clone());
     if res.is_err() {
       let cloned = tsfn_songs.clone();
       cloned.call(
@@ -65,8 +64,8 @@ pub fn scan_files(
       return;
     }
 
-    let playlist_scanner = PlaylistScanner::new(dir, tx_playlist, thumbnail_dir, song_scanner);
-    let res1 = playlist_scanner.start();
+    let playlist_scanner = PlaylistScanner::new(dir, thumbnail_dir, song_scanner);
+    let res1 = playlist_scanner.start(tx_song, tx_playlist);
     if res1.is_err() {
       let cloned = tsfn_songs.clone();
       cloned.call(
@@ -116,6 +115,7 @@ pub fn scan_files(
       }
     }
 
+    drop(playlist_scanner);
     pool.join();
   });
 

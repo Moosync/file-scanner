@@ -13,37 +13,42 @@ use uuid::Uuid;
 use crate::{
   error::ScanError,
   song_scanner::SongScanner,
-  structs::{Playlist, Song},
+  structs::{Artists, Playlist, Song},
   utils::{check_directory, get_files_recursively},
 };
 
 pub struct PlaylistScanner<'a> {
   dir: PathBuf,
-  tx_playlist: Sender<Result<Playlist, ScanError>>,
   song_scanner: SongScanner<'a>,
   thumbnail_dir: PathBuf,
 }
 
 impl<'a> PlaylistScanner<'a> {
-  pub fn new(
-    dir: PathBuf,
-    tx_playlist: Sender<Result<Playlist, ScanError>>,
-    thumbnail_dir: PathBuf,
-    song_scanner: SongScanner<'a>,
-  ) -> Self {
+  pub fn new(dir: PathBuf, thumbnail_dir: PathBuf, song_scanner: SongScanner<'a>) -> Self {
     Self {
       dir,
-      tx_playlist,
       thumbnail_dir,
       song_scanner,
     }
   }
 
   fn check_dirs(&self) -> Result<(), ScanError> {
-    check_directory(self.dir.clone())?;
     check_directory(self.thumbnail_dir.clone())?;
 
     Ok(())
+  }
+
+  fn parse_artists(&self, artists: Option<String>) -> Vec<Artists> {
+    let mut ret: Vec<Artists> = vec![];
+    if artists.is_some() {
+      for artist in artists.unwrap().split(";") {
+        ret.push(Artists {
+          artist_id: Uuid::new_v4().to_string(),
+          artist_name: artist.to_string(),
+        })
+      }
+    }
+    ret
   }
 
   fn scan_playlist(&self, path: &PathBuf) -> Result<(Playlist, Vec<Song>), ScanError> {
@@ -90,7 +95,7 @@ impl<'a> PlaylistScanner<'a> {
               let metadata = fs::metadata(&path_parsed)?;
               let mut song = Song::default();
               song.path = Some(line);
-              song.artists = artists;
+              song.artists = self.parse_artists(artists);
               song.duration = duration;
               song.title = title;
               song.song_type = song_type;
@@ -116,31 +121,38 @@ impl<'a> PlaylistScanner<'a> {
     ))
   }
 
-  fn scan_song_in_pool(&self, s: Song) {
+  fn scan_song_in_pool(&self, tx_song: Sender<Result<Song, ScanError>>, s: Song) {
     if s.song_type.is_none() || s.song_type.is_some() && s.song_type.unwrap() == "LOCAL" {
       self.song_scanner.scan_in_pool(
+        tx_song,
         s.size.unwrap() as u64,
         PathBuf::from_str(s.path.unwrap().as_str()).unwrap(),
       )
     }
   }
 
-  pub fn start(&self) -> Result<(), ScanError> {
+  pub fn start(
+    &self,
+    tx_song: Sender<Result<Song, ScanError>>,
+    tx_playlist: Sender<Result<Playlist, ScanError>>,
+  ) -> Result<(), ScanError> {
     self.check_dirs()?;
 
     let file_list = get_files_recursively(self.dir.clone())?;
 
     for playlist in file_list.playlist_list {
       let (playlist_dets, songs) = self.scan_playlist(&playlist)?;
-      self
-        .tx_playlist
+      tx_playlist
         .send(Ok(playlist_dets.clone()))
         .expect("channel will be there waiting for the pool");
 
       for s in songs {
-        self.scan_song_in_pool(s);
+        self.scan_song_in_pool(tx_song.clone(), s);
       }
     }
+
+    drop(tx_song);
+    drop(tx_playlist);
 
     Ok(())
   }

@@ -33,9 +33,7 @@ impl<'a> PlaylistScanner<'a> {
   }
 
   fn check_dirs(&self) -> Result<(), ScanError> {
-    check_directory(self.thumbnail_dir.clone())?;
-
-    Ok(())
+    check_directory(self.thumbnail_dir.clone())
   }
 
   fn parse_artists(&self, artists: Option<String>) -> Vec<Artists> {
@@ -154,25 +152,38 @@ impl<'a> PlaylistScanner<'a> {
     &self,
     tx_song: Sender<Result<Song, ScanError>>,
     tx_playlist: Sender<Result<Playlist, ScanError>>,
-  ) -> Result<(), ScanError> {
+  ) -> Result<usize, ScanError> {
     self.check_dirs()?;
 
     let file_list = get_files_recursively(self.dir.clone())?;
 
+    let mut len = 0;
+
     for playlist in file_list.playlist_list {
-      let (playlist_dets, songs) = self.scan_playlist(&playlist)?;
+      let playlist_scan_res = self.scan_playlist(&playlist);
+      if playlist_scan_res.is_err() {
+        tx_playlist
+          .send(Err(playlist_scan_res.unwrap_err()))
+          .expect("channel will be there waiting for the pool");
+        continue;
+      }
+
+      let (playlist_dets, songs) = playlist_scan_res.unwrap();
       tx_playlist
         .send(Ok(playlist_dets.clone()))
         .expect("channel will be there waiting for the pool");
 
+      len += songs.len();
+
       for s in songs {
         self.scan_song_in_pool(tx_song.clone(), s);
       }
+      continue;
     }
 
     drop(tx_song);
     drop(tx_playlist);
 
-    Ok(())
+    Ok(len)
   }
 }

@@ -59,7 +59,7 @@ impl<'a> SongScanner<'a> {
     &self,
     tx_song: Sender<Result<Song, ScanError>>,
     force: bool,
-  ) -> Result<(), ScanError> {
+  ) -> Result<usize, ScanError> {
     self.check_dirs()?;
 
     let file_list = get_files_recursively(self.dir.clone())?;
@@ -70,12 +70,14 @@ impl<'a> SongScanner<'a> {
       file_list.file_list
     };
 
+    let len = song_list.len();
+
     for (file_path, size) in song_list {
       self.scan_in_pool(tx_song.clone(), size, file_path);
     }
 
     drop(tx_song);
 
-    Ok(())
+    Ok(len)
   }
 }

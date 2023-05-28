@@ -17,7 +17,7 @@ use crate::{
 use fast_image_resize as fr;
 
 pub fn check_directory(dir: PathBuf) -> Result<(), ScanError> {
-  println!("{:?} {:?}", dir, !dir.is_dir());
+  println!("{:?} {:?}", dir, dir.is_dir());
   if !dir.is_dir() {
     fs::create_dir_all(dir)?
   }
@@ -32,6 +32,13 @@ pub fn get_files_recursively(dir: PathBuf) -> Result<FileList, ScanError> {
   lazy_static! {
     static ref SONG_RE: Regex = Regex::new("flac|mp3|ogg|m4a|webm|wav|wv|aac|opus").unwrap();
     static ref PLAYLIST_RE: Regex = Regex::new("m3u|m3u8").unwrap();
+  }
+
+  if !dir.exists() {
+    return Ok(FileList {
+      file_list,
+      playlist_list,
+    });
   }
 
   if dir.is_file() {

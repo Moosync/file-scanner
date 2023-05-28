@@ -36,4 +36,14 @@ export interface Playlist {
   id: string
   title: string
 }
-export function scanFiles(dir: string, thumbnailDir: string, databaseDir: string, artistSplit: string, threads: number, force: boolean, callback_song: (err: null | Error, result: Song) => void, callback_playlist: (err: null | Error, result: Playlist) => void): void
+export interface SongWithLen {
+  song: Song
+  size: number
+  current: number
+}
+export interface ErrorWithLen {
+  error: string
+  size: number
+  current: number
+}
+export function scanFiles(dir: string, thumbnailDir: string, databaseDir: string, artistSplit: string, threads: number, force: boolean, callback_song: (err: null | Error, result: SongWithLen) => void, callback_playlist: (err: null | Error, result: Playlist) => void, callback_enc: (err: null | Error) => void): void

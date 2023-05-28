@@ -19,11 +19,11 @@ use napi::{
 };
 use playlist_scanner::PlaylistScanner;
 use song_scanner::SongScanner;
-use structs::{Playlist, Song};
+use structs::{Playlist, SongWithLen};
 use threadpool::ThreadPool;
 
 #[napi(
-  ts_args_type = "dir: string, thumbnailDir: string, databaseDir: string, artistSplit: string, threads: number, force: boolean, callback_song: (err: null | Error, result: Song) => void, callback_playlist: (err: null | Error, result: Playlist) => void"
+  ts_args_type = "dir: string, thumbnailDir: string, databaseDir: string, artistSplit: string, threads: number, force: boolean, callback_song: (err: null | Error, result: SongWithLen) => void, callback_playlist: (err: null | Error, result: Playlist) => void, callback_end: (err: null | Error) => void"
 )]
 pub fn scan_files(
   dir: String,
@@ -34,16 +34,20 @@ pub fn scan_files(
   force: bool,
   callback_songs: JsFunction,
   callback_playlists: JsFunction,
+  callback_end: JsFunction,
 ) -> Result<Undefined, napi::Error> {
   let thumbnail_dir = PathBuf::from_str(thumbnail_dir.as_str())?;
   let dir = PathBuf::from_str(dir.as_str())?;
   let database_dir = PathBuf::from_str(database_dir.as_str())?;
 
-  let tsfn_songs: ThreadsafeFunction<Song, ErrorStrategy::CalleeHandled> =
+  let tsfn_songs: ThreadsafeFunction<SongWithLen, ErrorStrategy::CalleeHandled> =
     callback_songs.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
 
   let tsfn_playlists: ThreadsafeFunction<Playlist, ErrorStrategy::CalleeHandled> =
     callback_playlists.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
+
+  let tsfn_end: ThreadsafeFunction<(), ErrorStrategy::CalleeHandled> =
+    callback_end.create_threadsafe_function(0, |ctx| Ok(vec![ctx.value]))?;
 
   spawn(move || {
     let (tx_song, rx_song) = channel();
@@ -58,10 +62,11 @@ pub fn scan_files(
       threads as usize
     };
 
-    let mut pool = ThreadPool::new(thread_count);
+    let mut song_pool = ThreadPool::new(thread_count);
+
     let song_scanner = SongScanner::new(
       dir.clone(),
-      &mut pool,
+      &mut song_pool,
       database_dir.clone(),
       thumbnail_dir.clone(),
       artist_split,
@@ -77,10 +82,14 @@ pub fn scan_files(
       return;
     }
 
+    let mut len = res.unwrap();
+
+    // Start playlist scanner
     let playlist_scanner = PlaylistScanner::new(dir, thumbnail_dir, song_scanner);
-    let res1 = playlist_scanner.start(tx_song, tx_playlist);
-    if res1.is_err() {
-      let cloned = tsfn_songs.clone();
+
+    let res = playlist_scanner.start(tx_song, tx_playlist);
+    if res.is_err() {
+      let cloned = tsfn_playlists.clone();
       cloned.call(
         Err(res.err().unwrap().into()),
         ThreadsafeFunctionCallMode::Blocking,
@@ -88,48 +97,35 @@ pub fn scan_files(
       return;
     }
 
-    let mut song_ended = false;
-    let mut playlist_ended = false;
-    loop {
-      let song = rx_song.try_recv();
-      if song.is_err() {
-        if song
-          .unwrap_err()
-          .eq(&std::sync::mpsc::TryRecvError::Disconnected)
-        {
-          song_ended = true;
-        }
-      } else {
-        let cloned = tsfn_songs.clone();
-        cloned.call(
-          song.unwrap().map_err(|e| e.into()),
-          ThreadsafeFunctionCallMode::NonBlocking,
-        );
-      }
+    for playlist in rx_playlist {
+      let cloned = tsfn_playlists.clone();
+      cloned.call(
+        playlist.map_err(|e| e.into()),
+        ThreadsafeFunctionCallMode::NonBlocking,
+      );
+    }
 
-      let playlist = rx_playlist.try_recv();
-      if playlist.is_err() {
-        if playlist
-          .unwrap_err()
-          .eq(&std::sync::mpsc::TryRecvError::Disconnected)
-        {
-          playlist_ended = true;
-        }
-      } else {
-        let cloned = tsfn_playlists.clone();
-        cloned.call(
-          playlist.unwrap().map_err(|e| e.into()),
-          ThreadsafeFunctionCallMode::NonBlocking,
-        );
-      }
+    len += res.unwrap();
 
-      if song_ended && playlist_ended {
-        break;
-      }
+    let mut current_song = 0;
+
+    for song in rx_song {
+      let cloned = tsfn_songs.clone();
+      cloned.call(
+        song.map_err(|e| e.into()).map(|v| SongWithLen {
+          song: v,
+          size: len as u32,
+          current: current_song,
+        }),
+        ThreadsafeFunctionCallMode::NonBlocking,
+      );
+      current_song += 1;
     }
 
     drop(playlist_scanner);
-    pool.join();
+    song_pool.join();
+
+    tsfn_end.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
   });
 
   Ok(())

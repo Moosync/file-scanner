@@ -66,3 +66,11 @@ pub struct Playlist {
   pub id: String,
   pub title: String,
 }
+
+#[derive(Debug)]
+#[napi(object)]
+pub struct SongWithLen {
+  pub song: Song,
+  pub size: u32,
+  pub current: u32,
+}

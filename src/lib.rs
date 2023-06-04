@@ -101,7 +101,7 @@ pub fn scan_files(
       let cloned = tsfn_playlists.clone();
       cloned.call(
         playlist.map_err(|e| e.into()),
-        ThreadsafeFunctionCallMode::NonBlocking,
+        ThreadsafeFunctionCallMode::Blocking,
       );
     }
 
@@ -117,7 +117,7 @@ pub fn scan_files(
           size: len as u32,
           current: current_song,
         }),
-        ThreadsafeFunctionCallMode::NonBlocking,
+        ThreadsafeFunctionCallMode::Blocking,
       );
       current_song += 1;
     }
@@ -125,7 +125,7 @@ pub fn scan_files(
     drop(playlist_scanner);
     song_pool.join();
 
-    tsfn_end.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
+    tsfn_end.call(Ok(()), ThreadsafeFunctionCallMode::Blocking);
   });
 
   Ok(())

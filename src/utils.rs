@@ -42,56 +42,58 @@ pub fn get_files_recursively(dir: PathBuf) -> Result<FileList, ScanError> {
   }
 
   if dir.is_file() {
-    let metadata = fs::metadata(&dir)?;
-    let extension = dir
-      .extension()
-      .unwrap_or_default()
-      .to_str()
-      .unwrap_or_default();
-    if !extension.is_empty() {
-      if SONG_RE.is_match(extension) {
-        file_list.push((dir.clone(), metadata.len()));
-      }
+    if let Ok(metadata) = fs::metadata(&dir) {
+      let extension = dir
+        .extension()
+        .unwrap_or_default()
+        .to_str()
+        .unwrap_or_default();
+      if !extension.is_empty() {
+        if SONG_RE.is_match(extension) {
+          file_list.push((dir.clone(), metadata.len()));
+        }
 
-      if PLAYLIST_RE.is_match(extension) {
-        playlist_list.push(dir);
+        if PLAYLIST_RE.is_match(extension) {
+          playlist_list.push(dir);
+        }
       }
+      return Ok(FileList {
+        file_list,
+        playlist_list,
+      });
     }
-    return Ok(FileList {
-      file_list,
-      playlist_list,
-    });
   }
 
   let dir_entries = fs::read_dir(dir)?;
 
   for entry in dir_entries {
-    let entry = entry?;
-    let path = entry.path();
+    if let Ok(entry) = entry {
+      let path = entry.path();
 
-    let metadata = fs::metadata(&path)?;
-
-    if metadata.is_dir() {
-      let res = get_files_recursively(path)?;
-      file_list.extend_from_slice(&res.file_list);
-      playlist_list.extend_from_slice(&res.playlist_list);
-      continue;
-    }
-
-    if metadata.is_file() {
-      let extension = path
-        .extension()
-        .unwrap_or_default()
-        .to_str()
-        .unwrap_or_default();
-
-      if !extension.is_empty() {
-        if SONG_RE.is_match(extension) {
-          file_list.push((path.clone(), metadata.len()));
+      if let Ok(metadata) = fs::metadata(&path) {
+        if metadata.is_dir() {
+          let res = get_files_recursively(path)?;
+          file_list.extend_from_slice(&res.file_list);
+          playlist_list.extend_from_slice(&res.playlist_list);
+          continue;
         }
 
-        if PLAYLIST_RE.is_match(extension) {
-          playlist_list.push(path);
+        if metadata.is_file() {
+          let extension = path
+            .extension()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or_default();
+
+          if !extension.is_empty() {
+            if SONG_RE.is_match(extension) {
+              file_list.push((path.clone(), metadata.len()));
+            }
+
+            if PLAYLIST_RE.is_match(extension) {
+              playlist_list.push(path);
+            }
+          }
         }
       }
     }
@@ -153,7 +155,10 @@ fn store_picture(
     )?;
   }
 
-  Ok((high_path.canonicalize()?, low_path.canonicalize()?))
+  Ok((
+    dunce::canonicalize(high_path)?,
+    dunce::canonicalize(low_path)?,
+  ))
 }
 
 fn scan_lrc(mut path: PathBuf) -> Option<String> {
@@ -208,7 +213,7 @@ pub fn scan_file(
   song.bitrate = Some(properties.audio_bitrate().unwrap_or_default() * 1000);
   song.sample_rate = properties.sample_rate();
   song.duration = Some(properties.duration().as_secs() as f64);
-  song.path = Some(path.to_string_lossy().to_string());
+  song.path = Some(dunce::canonicalize(path)?.to_string_lossy().to_string());
   song.size = Some(size as u32);
   song.playlist_id = playlist_id.clone();
   song._id = Uuid::new_v4().to_string();
@@ -219,8 +224,8 @@ pub fn scan_file(
     let picture = metadata.pictures().get(0);
     if picture.is_some() {
       if let Ok((high_path, low_path)) = store_picture(thumbnail_dir, picture.unwrap()) {
-        song.high_path = Some(high_path.to_str().unwrap_or_default().to_string());
-        song.low_path = Some(low_path.to_str().unwrap_or_default().to_string());
+        song.high_path = Some(high_path.to_string_lossy().to_string());
+        song.low_path = Some(low_path.to_string_lossy().to_string());
       }
     } else {
       let mut base_path = path.clone();

@@ -40,13 +40,25 @@ impl<'a> SongScanner<'a> {
     Ok(())
   }
 
-  pub fn scan_in_pool(&self, tx: Sender<Result<Song, ScanError>>, size: u64, path: PathBuf) {
+  pub fn scan_in_pool(
+    &self,
+    tx: Sender<Result<Song, ScanError>>,
+    size: u64,
+    path: PathBuf,
+    playlist_id: Option<String>,
+  ) {
     let thumbnail_dir = self.thumbnail_dir.clone();
     let artist_split = self.artist_split.clone();
     self.pool.execute(move || {
-      let mut metadata = scan_file(&path, &thumbnail_dir, &None, size, false, &artist_split);
+      let mut metadata = scan_file(
+        &path,
+        &thumbnail_dir,
+        &playlist_id,
+        size,
+        false,
+        &artist_split,
+      );
       if metadata.is_err() {
-        println!("Guessing filetype");
         metadata = scan_file(&path, &thumbnail_dir, &None, size, true, &artist_split);
       }
 
@@ -70,10 +82,12 @@ impl<'a> SongScanner<'a> {
       file_list.file_list
     };
 
+    println!("{:?}", song_list);
+
     let len = song_list.len();
 
     for (file_path, size) in song_list {
-      self.scan_in_pool(tx_song.clone(), size, file_path);
+      self.scan_in_pool(tx_song.clone(), size, file_path, None);
     }
 
     drop(tx_song);

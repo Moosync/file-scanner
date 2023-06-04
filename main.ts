@@ -1,7 +1,8 @@
 import {scanFiles} from '.'
 
-scanFiles('/run/media/ovenoboyo/Slow Disk/Music/', "./out", "/home/ovenoboyo/.config/moosync/databases/songs.db", ",", 12, true, (err, res) => {
-  console.log('song', err, res)
+scanFiles('E:\\Music', "./out", "C:\\Users\\sahil\\AppData\\Roaming\\moosync\\databases\\songs.db", ",", 12, false, (err, res) => {
+  if (res?.song?.playlistId)
+  console.log('song', err, res.song.playlistId)
 }, (err, res) => {
   console.log('got playlist', err, res)
 }, () => {

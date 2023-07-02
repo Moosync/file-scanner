@@ -258,7 +258,10 @@ pub fn scan_file(
       lyrics = scan_lrc(path.clone());
     }
 
-    song.title = metadata.title().map(|s| s.to_string());
+    song.title = metadata
+      .title()
+      .map(|s| s.to_string())
+      .or(path.file_name().map(|s| s.to_string_lossy().to_string()));
     // song.album = metadata.album().map(|s| s.to_string());
     let artists: Option<Vec<Artists>> = metadata.artist().map(|s| {
       s.split(artist_split)

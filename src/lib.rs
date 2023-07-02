@@ -107,7 +107,7 @@ pub fn scan_files(
 
     len += res.unwrap();
 
-    let mut current_song = 0;
+    let mut current_song = 1;
 
     for song in rx_song {
       let cloned = tsfn_songs.clone();

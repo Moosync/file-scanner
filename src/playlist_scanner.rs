@@ -143,6 +143,7 @@ impl<'a> PlaylistScanner<'a> {
       Playlist {
         id: playlist_id,
         title: playlist_title,
+        path: path.to_string_lossy().to_string(),
       },
       songs,
     ))

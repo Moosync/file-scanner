@@ -65,6 +65,7 @@ pub struct FileList {
 pub struct Playlist {
   pub id: String,
   pub title: String,
+  pub path: String,
 }
 
 #[derive(Debug)]

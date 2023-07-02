@@ -35,6 +35,7 @@ export interface Artists {
 export interface Playlist {
   id: string
   title: string
+  path: string
 }
 export interface SongWithLen {
   song: Song

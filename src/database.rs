@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{cmp::min, collections::HashSet, path::PathBuf};
 
 use sqlite3::{Connection, Error, State};
 
@@ -8,6 +8,8 @@ fn get_database(dir: PathBuf) -> Result<Connection, Error> {
   sqlite3::open(dir)
 }
 
+const EXPRESSION_LIMIT: usize = 998;
+
 pub fn files_not_in_db(
   database: PathBuf,
   file_list: Vec<(PathBuf, u64)>,
@@ -16,7 +18,7 @@ pub fn files_not_in_db(
 
   let statement_raw = format!(
     "SELECT path, size from allsongs WHERE {}",
-    "(path = ? AND size = ?) OR ".repeat(hash_set.len())
+    "(path = ? AND size = ?) OR ".repeat(min(hash_set.len(), EXPRESSION_LIMIT))
   );
 
   let mut statement = statement_raw.chars();
@@ -33,9 +35,29 @@ pub fn files_not_in_db(
 
   let mut i = 1;
   for (path, size) in hash_set.iter() {
-    cursor.bind(i, path.to_str().unwrap())?;
+    cursor.bind(
+      i,
+      dunce::canonicalize(path)?
+        .to_string_lossy()
+        .to_string()
+        .as_str(),
+    )?;
     cursor.bind(i + 1, *size as f64)?;
+
     i += 2;
+
+    if i == (EXPRESSION_LIMIT * 2) + 1 {
+      while let State::Row = cursor.next().unwrap() {
+        let path = cursor.read::<String>(0).unwrap();
+        let size = cursor.read::<i64>(1).unwrap();
+
+        result.insert((PathBuf::from(path), size as u64));
+      }
+
+      i = 1;
+      cursor = connection.prepare(statement.as_str())?;
+      continue;
+    }
   }
 
   while let State::Row = cursor.next().unwrap() {

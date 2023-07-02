@@ -60,8 +60,10 @@ impl<'a> PlaylistScanner<'a> {
     let mut title: Option<String> = None;
     let mut artists: Option<String> = None;
     let mut playlist_title: String = "".to_string();
+
+    let playlist_id = Uuid::new_v4().to_string();
     for line_res in lines {
-      if let Ok(line) = line_res {
+      if let Ok(mut line) = line_res {
         if line.starts_with("#EXTINF:") {
           let metadata = line.substring(8, line.len());
           let split_index = metadata.find(",").unwrap_or_default();
@@ -87,17 +89,24 @@ impl<'a> PlaylistScanner<'a> {
         }
 
         if !line.starts_with("#") {
+          if line.starts_with("file://") {
+            line = line[8..].to_string();
+          }
+
           let mut song = Song::default();
 
           let s_type = song_type.clone();
-          song.song_type = s_type.unwrap_or("LOCAL".to_string());
 
+          song.song_type = s_type.unwrap_or("LOCAL".to_string());
           song._id = Uuid::new_v4().to_string();
 
           if song.song_type == "LOCAL" {
-            let path = PathBuf::from_str(line.as_str());
-            if let Ok(path_parsed) = path {
-              let metadata = fs::metadata(&path_parsed)?;
+            let song_path = PathBuf::from_str(line.as_str());
+            if let Ok(mut path_parsed) = song_path {
+              if path_parsed.is_relative() {
+                path_parsed = path.parent().unwrap().join(path_parsed).canonicalize()?;
+              }
+
               if !path_parsed.exists() {
                 artists = None;
                 duration = None;
@@ -106,15 +115,20 @@ impl<'a> PlaylistScanner<'a> {
                 continue;
               }
 
+              let metadata = fs::metadata(&path_parsed)?;
               song.size = Some(metadata.len() as u32);
+              song.path = Some(path_parsed.to_string_lossy().to_string());
             }
           }
 
-          song.path = Some(line);
+          if song.path.is_none() {
+            song.path = Some(line);
+          }
+
           song.artists = self.parse_artists(artists);
           song.duration = duration;
           song.title = title;
-
+          song.playlist_id = Some(playlist_id.clone());
           songs.push(song);
 
           artists = None;
@@ -127,7 +141,7 @@ impl<'a> PlaylistScanner<'a> {
 
     Ok((
       Playlist {
-        id: Uuid::new_v4().to_string(),
+        id: playlist_id,
         title: playlist_title,
       },
       songs,
@@ -140,6 +154,7 @@ impl<'a> PlaylistScanner<'a> {
         tx_song,
         s.size.unwrap() as u64,
         PathBuf::from_str(s.path.unwrap().as_str()).unwrap(),
+        s.playlist_id,
       )
     } else {
       tx_song
@@ -159,11 +174,17 @@ impl<'a> PlaylistScanner<'a> {
 
     let mut len = 0;
 
+    println!("{:?}", file_list.playlist_list);
+
     for playlist in file_list.playlist_list {
       let playlist_scan_res = self.scan_playlist(&playlist);
       if playlist_scan_res.is_err() {
         tx_playlist
-          .send(Err(playlist_scan_res.unwrap_err()))
+          .send(Err(ScanError::String(format!(
+            "Failed to scan {}: {:?}",
+            playlist.display(),
+            playlist_scan_res.unwrap_err()
+          ))))
           .expect("channel will be there waiting for the pool");
         continue;
       }

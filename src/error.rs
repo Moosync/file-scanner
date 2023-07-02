@@ -19,6 +19,7 @@ pub enum ScanError {
   LoftyError(LoftyError),
   Sqlite3Error(sqlite3::Error),
   ParseFloatError(ParseFloatError),
+  JWalkError(jwalk::Error),
 }
 
 impl fmt::Display for ScanError {
@@ -33,6 +34,7 @@ impl fmt::Display for ScanError {
       ScanError::LoftyError(e) => write!(f, "{:?}", e),
       ScanError::Sqlite3Error(e) => write!(f, "{:?}", e),
       ScanError::ParseFloatError(e) => write!(f, "{:?}", e),
+      ScanError::JWalkError(e) => write!(f, "{:?}", e),
     }
   }
 }
@@ -88,6 +90,12 @@ impl From<sqlite3::Error> for ScanError {
 impl From<ParseFloatError> for ScanError {
   fn from(value: ParseFloatError) -> Self {
     ScanError::ParseFloatError(value)
+  }
+}
+
+impl From<jwalk::Error> for ScanError {
+  fn from(value: jwalk::Error) -> Self {
+    ScanError::JWalkError(value)
   }
 }
 

@@ -119,10 +119,15 @@ impl<'a> PlaylistScanner<'a> {
               song.size = Some(metadata.len() as u32);
               song.path = Some(path_parsed.to_string_lossy().to_string());
             }
-          }
 
-          if song.path.is_none() {
-            song.path = Some(line);
+            if song.path.is_none() {
+              song.path = Some(line);
+            }
+
+            song.playback_url = None;
+          } else {
+            song._id = format!("{}:{}", song.song_type, line);
+            song.playback_url = Some(line);
           }
 
           song.artists = self.parse_artists(artists);

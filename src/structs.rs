@@ -17,6 +17,9 @@ pub struct Song {
   pub lyrics: Option<String>,
   pub track_no: Option<String>,
 
+  #[napi(js_name = "playbackUrl")]
+  pub playback_url: Option<String>,
+
   #[napi(js_name = "song_coverPath_high")]
   pub high_path: Option<String>,
 

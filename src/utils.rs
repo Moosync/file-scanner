@@ -105,6 +105,43 @@ pub fn get_files_recursively(dir: PathBuf) -> Result<FileList, ScanError> {
   })
 }
 
+fn generate_image(data: &[u8], path: PathBuf, dimensions: u32) -> Result<(), ScanError> {
+  let img = image::load_from_memory(&data)?;
+
+  let width = NonZeroU32::new(img.width()).unwrap();
+  let height = NonZeroU32::new(img.height()).unwrap();
+  let src_image = fr::Image::from_vec_u8(
+    width,
+    height,
+    img.to_rgba8().into_raw(),
+    fr::PixelType::U8x4,
+  )
+  .unwrap();
+
+  // Create container for data of destination image
+  let dst_width = NonZeroU32::new(dimensions).unwrap();
+  let dst_height = NonZeroU32::new(dimensions).unwrap();
+  let mut dst_image = fr::Image::new(dst_width, dst_height, src_image.pixel_type());
+
+  // Get mutable view of destination image data
+  let mut dst_view = dst_image.view_mut();
+
+  // Create Resizer instance and resize source image
+  // into buffer of destination image
+  let mut resizer = fr::Resizer::new(fr::ResizeAlg::Nearest);
+  resizer.resize(&src_image.view(), &mut dst_view)?;
+
+  image::save_buffer(
+    path,
+    dst_image.buffer(),
+    dst_width.get(),
+    dst_height.get(),
+    ColorType::Rgba8,
+  )?;
+
+  Ok(())
+}
+
 fn store_picture(
   thumbnail_dir: &PathBuf,
   picture: &Picture,
@@ -117,42 +154,11 @@ fn store_picture(
   let high_path = thumbnail_dir.join(format!("{}.png", hash_str));
 
   if !Path::new(high_path.to_str().unwrap()).exists() {
-    std::fs::write(high_path.clone(), data).expect("Couldnt write to file");
+    generate_image(&data, high_path.clone(), 400)?;
   }
 
   if !Path::new(low_path.to_str().unwrap()).exists() {
-    let img = image::load_from_memory(&data)?;
-
-    let width = NonZeroU32::new(img.width()).unwrap();
-    let height = NonZeroU32::new(img.height()).unwrap();
-    let src_image = fr::Image::from_vec_u8(
-      width,
-      height,
-      img.to_rgba8().into_raw(),
-      fr::PixelType::U8x4,
-    )
-    .unwrap();
-
-    // Create container for data of destination image
-    let dst_width = NonZeroU32::new(80).unwrap();
-    let dst_height = NonZeroU32::new(80).unwrap();
-    let mut dst_image = fr::Image::new(dst_width, dst_height, src_image.pixel_type());
-
-    // Get mutable view of destination image data
-    let mut dst_view = dst_image.view_mut();
-
-    // Create Resizer instance and resize source image
-    // into buffer of destination image
-    let mut resizer = fr::Resizer::new(fr::ResizeAlg::Nearest);
-    resizer.resize(&src_image.view(), &mut dst_view)?;
-
-    image::save_buffer(
-      low_path.clone(),
-      dst_image.buffer(),
-      dst_width.get(),
-      dst_height.get(),
-      ColorType::Rgba8,
-    )?;
+    generate_image(&data, low_path.clone(), 80)?;
   }
 
   Ok((

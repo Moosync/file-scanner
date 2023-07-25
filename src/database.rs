@@ -48,8 +48,8 @@ pub fn files_not_in_db(
 
     if i == (EXPRESSION_LIMIT * 2) + 1 {
       while let State::Row = cursor.next().unwrap() {
-        let path = cursor.read::<String>(0).unwrap();
-        let size = cursor.read::<i64>(1).unwrap();
+        let path = cursor.read::<String>(0)?;
+        let size = cursor.read::<i64>(1)?;
 
         result.insert((PathBuf::from(path), size as u64));
       }
@@ -61,8 +61,8 @@ pub fn files_not_in_db(
   }
 
   while let State::Row = cursor.next().unwrap() {
-    let path = cursor.read::<String>(0).unwrap();
-    let size = cursor.read::<i64>(1).unwrap();
+    let path = cursor.read::<String>(0)?;
+    let size = cursor.read::<i64>(1)?;
 
     result.insert((PathBuf::from(path), size as u64));
   }

@@ -285,6 +285,9 @@ pub fn scan_file(
         album_name: album.unwrap().to_string(),
         album_cover_path_high: song.high_path.clone(),
         album_cover_path_low: song.low_path.clone(),
+        album_artist: metadata
+          .get_string(&lofty::ItemKey::AlbumArtist)
+          .map(|s| s.to_owned()),
       })
     }
 

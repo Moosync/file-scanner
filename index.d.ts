@@ -28,6 +28,7 @@ export interface Album {
   album_name: string
   album_coverPath_high?: string
   album_coverPath_low?: string
+  album_artist?: string
 }
 export interface Artists {
   artist_id: string

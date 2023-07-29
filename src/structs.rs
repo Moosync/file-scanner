@@ -45,6 +45,9 @@ pub struct Album {
 
   #[napi(js_name = "album_coverPath_low")]
   pub album_cover_path_low: Option<String>,
+
+  #[napi(js_name = "album_artist")]
+  pub album_artist: Option<String>,
 }
 
 #[derive(Default, Debug)]

@@ -71,9 +71,26 @@ impl<'a> PlaylistScanner<'a> {
           duration = Some(metadata.substring(0, split_index).parse::<f64>()?);
 
           let non_duration = metadata.substring(split_index + 1, metadata.len());
-          let (artists_str, title_str) = non_duration.split_at(non_duration.find("-").unwrap() - 1);
+
+          let mut artists_str = "";
+          let mut title_str = "";
+
+          let separator_with_space = non_duration.find(" - ");
+          if separator_with_space.is_some() {
+            (artists_str, title_str) = non_duration.split_at(separator_with_space.unwrap() + 1);
+          } else {
+            let separator_without_space = non_duration.find("-");
+            if separator_without_space.is_some() {
+              (artists_str, title_str) = non_duration.split_at(separator_without_space.unwrap());
+            } else {
+              title_str = non_duration;
+            }
+          }
+
           artists = Some(artists_str.trim().to_string());
           title = Some(title_str.replacen("-", "", 1).trim().to_string());
+
+          println!("{:?} {:?}", artists, title);
 
           continue;
         }
@@ -155,10 +172,10 @@ impl<'a> PlaylistScanner<'a> {
   }
 
   fn scan_song_in_pool(&self, tx_song: Sender<Result<Song, ScanError>>, s: Song) {
-    if s.song_type == "LOCAL" {
+    if s.song_type == "LOCAL" && s.path.is_some() {
       self.song_scanner.scan_in_pool(
         tx_song,
-        s.size.unwrap() as u64,
+        s.size.unwrap_or_default() as u64,
         PathBuf::from_str(s.path.unwrap().as_str()).unwrap(),
         s.playlist_id,
       )

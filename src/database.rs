@@ -47,7 +47,7 @@ pub fn files_not_in_db(
     i += 2;
 
     if i == (EXPRESSION_LIMIT * 2) + 1 {
-      while let State::Row = cursor.next().unwrap() {
+      while let State::Row = cursor.next()? {
         let path = cursor.read::<String>(0)?;
         let size = cursor.read::<i64>(1)?;
 
@@ -60,7 +60,7 @@ pub fn files_not_in_db(
     }
   }
 
-  while let State::Row = cursor.next().unwrap() {
+  while let State::Row = cursor.next()? {
     let path = cursor.read::<String>(0)?;
     let size = cursor.read::<i64>(1)?;
 

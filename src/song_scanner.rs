@@ -77,7 +77,7 @@ impl<'a> SongScanner<'a> {
     let file_list = get_files_recursively(self.dir.clone())?;
 
     let song_list = if !force {
-      files_not_in_db(self.database_path.clone(), file_list.file_list).unwrap()
+      files_not_in_db(self.database_path.clone(), file_list.file_list)?
     } else {
       file_list.file_list
     };

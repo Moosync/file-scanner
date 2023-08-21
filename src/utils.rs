@@ -280,6 +280,10 @@ pub fn scan_file(
 
     let album = metadata.album();
     if album.is_some() {
+      song.track_no = metadata
+        .get_string(&lofty::ItemKey::TrackNumber)
+        .map(|s| s.to_owned());
+
       song.album = Some(Album {
         album_id: Uuid::new_v4().to_string(),
         album_name: album.unwrap().to_string(),

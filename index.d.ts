@@ -16,7 +16,7 @@ export interface Song {
   year?: string
   genre?: Array<string>
   lyrics?: string
-  trackNo?: string
+  track_no?: string
   playbackUrl?: string
   song_coverPath_high?: string
   song_coverPath_low?: string

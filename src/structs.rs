@@ -15,6 +15,8 @@ pub struct Song {
   pub year: Option<String>,
   pub genre: Option<Vec<String>>,
   pub lyrics: Option<String>,
+
+  #[napi(js_name = "track_no")]
   pub track_no: Option<String>,
 
   #[napi(js_name = "playbackUrl")]

@@ -204,8 +204,20 @@ pub fn scan_file(
 ) -> Result<Song, ScanError> {
   let file: lofty::TaggedFile;
 
+  let mut song: Song = Song::default();
+  song._id = Uuid::new_v4().to_string();
+  song.title = Some(path.file_name().unwrap().to_string_lossy().to_string());
+  song.path = Some(dunce::canonicalize(path)?.to_string_lossy().to_string());
+  song.size = Some(size as u32);
+
   if guess {
-    file = read_from_path(path.clone())?;
+    let file_res = read_from_path(path.clone());
+    if file_res.is_err() {
+      println!("Error reading file {:?}", file_res.err());
+      return Ok(song);
+    }
+
+    file = file_res.unwrap()
   } else {
     file = Probe::open(path.clone())?.guess_file_type()?.read()?;
   }
@@ -215,14 +227,10 @@ pub fn scan_file(
   if tags.is_none() {
     tags = file.first_tag();
   }
-  let mut song = Song::default();
   song.bitrate = Some(properties.audio_bitrate().unwrap_or_default() * 1000);
   song.sample_rate = properties.sample_rate();
   song.duration = Some(properties.duration().as_secs() as f64);
-  song.path = Some(dunce::canonicalize(path)?.to_string_lossy().to_string());
-  song.size = Some(size as u32);
   song.playlist_id = playlist_id.clone();
-  song._id = Uuid::new_v4().to_string();
 
   if tags.is_some() {
     let metadata = tags.unwrap();

@@ -24,9 +24,9 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@napi-rs/cli": "^2.15.2",
-    "@types/node": "^20.1.2",
-    "ava": "^5.1.1"
+    "@napi-rs/cli": "^2.16.3",
+    "@types/node": "^20.5.7",
+    "ava": "^5.3.1"
   },
   "ava": {
     "timeout": "3m"
@@ -46,6 +46,6 @@
   },
   "dependencies": {
     "ts-node": "^10.9.1",
-    "typescript": "^5.0.4"
+    "typescript": "^5.2.2"
   }
 }

@@ -48,7 +48,7 @@ pub fn get_files_recursively(dir: PathBuf) -> Result<FileList, ScanError> {
         .unwrap_or_default()
         .to_str()
         .unwrap_or_default();
-      if !extension.is_empty() {
+        if !extension.is_empty() {
         if SONG_RE.is_match(extension) {
           file_list.push((dir.clone(), metadata.len()));
         }
@@ -70,32 +70,9 @@ pub fn get_files_recursively(dir: PathBuf) -> Result<FileList, ScanError> {
     if let Ok(entry) = entry {
       let path = entry.path();
 
-      if let Ok(metadata) = fs::metadata(&path) {
-        if metadata.is_dir() {
-          let res = get_files_recursively(path)?;
-          file_list.extend_from_slice(&res.file_list);
-          playlist_list.extend_from_slice(&res.playlist_list);
-          continue;
-        }
-
-        if metadata.is_file() {
-          let extension = path
-            .extension()
-            .unwrap_or_default()
-            .to_str()
-            .unwrap_or_default();
-
-          if !extension.is_empty() {
-            if SONG_RE.is_match(extension) {
-              file_list.push((path.clone(), metadata.len()));
-            }
-
-            if PLAYLIST_RE.is_match(extension) {
-              playlist_list.push(path);
-            }
-          }
-        }
-      }
+      let res = get_files_recursively(path)?;
+      file_list.extend_from_slice(&res.file_list);
+      playlist_list.extend_from_slice(&res.playlist_list);
     }
   }
 

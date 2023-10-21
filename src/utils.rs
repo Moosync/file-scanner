@@ -197,7 +197,12 @@ pub fn scan_file(
 
     file = file_res.unwrap()
   } else {
-    file = Probe::open(path.clone())?.guess_file_type()?.read()?;
+    let file_res = Probe::open(path.clone())?.guess_file_type()?.read();
+    if file_res.is_err() {
+      println!("Error reading file without guess {:?}", file_res.err());
+      return Ok(song);
+    }
+    file = file_res.unwrap();
   }
 
   let properties = file.properties();

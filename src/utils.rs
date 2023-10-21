@@ -187,6 +187,7 @@ pub fn scan_file(
   song.path = Some(dunce::canonicalize(path)?.to_string_lossy().to_string());
   song.size = Some(size as u32);
   song.duration = Some(0f64);
+  song.song_type = "LOCAL".to_string();
 
   if guess {
     let file_res = read_from_path(path.clone());
@@ -293,7 +294,6 @@ pub fn scan_file(
     song.year = metadata.year().map(|s| s.to_string());
     song.genre = metadata.genre().map(|s| vec![s.to_string()]);
     song.lyrics = lyrics;
-    song.song_type = "LOCAL".to_string();
   }
 
   Ok(song)

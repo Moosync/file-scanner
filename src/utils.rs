@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use lofty::{read_from_path, Accessor, AudioFile, Picture, Probe, TaggedFileExt};
+use lofty::{read_from_path, Accessor, AudioFile, Picture, Probe, TaggedFileExt, ParseOptions};
 use regex::Regex;
 use std::{
   fs::{self},
@@ -186,12 +186,13 @@ pub fn scan_file(
   song.title = Some(path.file_name().unwrap().to_string_lossy().to_string());
   song.path = Some(dunce::canonicalize(path)?.to_string_lossy().to_string());
   song.size = Some(size as u32);
+  song.duration = Some(0f64);
 
   if guess {
     let file_res = read_from_path(path.clone());
     if file_res.is_err() {
       println!("Error reading file {:?}", file_res.err());
-      return Ok(song);
+      return scan_file(path, thumbnail_dir, playlist_id, size, false, artist_split);
     }
 
     file = file_res.unwrap()
